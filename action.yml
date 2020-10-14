@@ -1,0 +1,10 @@
+name: 'Merlin GitHub Actions Helper'
+author: 'Gabor Horvath'
+description: 'Calls Raiffeisen Build Automation with Ansible support and/or Merlin deployment scripts'
+inputs:
+  action-type:
+    description: 'Type of action. Allowed values: build or deploy'
+    required: true
+runs:
+  using: 'node12'
+  main: 'dist/index.js'
