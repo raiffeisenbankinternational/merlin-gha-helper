@@ -1,7 +1,7 @@
 // RBI Merlin's Custom GitHub Action
 // Author: Gabor Horvath <gabor1.horvath at rbinternational.com>
 
-// GitHub Actions Toolkit 
+// GitHub Actions Toolkit
 const core = require("@actions/core");
 const exec = require("@actions/exec");
 const artifact = require("@actions/artifact");
@@ -13,8 +13,37 @@ const files = [
     'build/cda/buildInfo.json'
 ]
 
+const CDA_COMPONENT_ALIAS = "svc";
+const CDA_BRIDGE_REQUEST_ID = process.env.GITHUB_RUN_ID;
+const CDA_REQUEST_ID = CDA_BRIDGE_REQUEST_ID;
+const CDA_EXTRACT_PATH = `${process.env.GITHUB_WORKSPACE}/${CDA_REQUEST_ID}`
+const CDA_PRODUCT_RELEASE = process.env.MERLIN_RELEASE
+const CDA_PRODUCT_NAME = process.env.MERLIN_PRODUCT_NAME
+const CDA_COMPONENT_NAME = process.env.MERLIN_COMPONENT_NAME
+const CDA_ENVIRONMENT = process.env.MERLIN_ENVIRONMENT
+const CDA_COMPONENT_NEW_VERSION=`${CDA_PRODUCT_RELEASE}.b${process.env.MERLIN_BUILD_NUMBER}`
+const ENVIRONMENT_ZONE_UPPER = process.env.MERLIN_ACCOUNT
+
+// vars required for the build
+const WORKSPACE = process.env.GITHUB_WORKSPACE
+
 // defines where to extract the artifact used for deployment
-var extractPath = process.env.CDA_EXTRACT_PATH;
+const extractPath = CDA_EXTRACT_PATH;
+
+// construct this weird CDA_PROPERTIES setting
+function create_properties() {
+    const make_prop = (k, v) => `export ${k}=${v}`
+
+    return `${make_prop("CDA_COMPONENT_ALIAS", CDA_COMPONENT_ALIAS)}\n` +
+           `${make_prop("CDA_BRIDGE_REQUEST_ID", CDA_BRIDGE_REQUEST_ID)}\n` +
+           `${make_prop("CDA_REQUEST_ID", CDA_REQUEST_ID)}\n` +
+           `${make_prop("CDA_EXTRACT_PATH", CDA_EXTRACT_PATH)}\n` +
+           `${make_prop("CDA_PRODUCT_RELEASE", CDA_PRODUCT_RELEASE)}\n` +
+           `${make_prop("CDA_PRODUCT_NAME", CDA_PRODUCT_NAME)}\n` +
+           `${make_prop("CDA_COMPONENT_NAME", CDA_COMPONENT_NAME)}\n` +
+           `${make_prop("CDA_ENVIRONMENT", CDA_ENVIRONMENT)}\n` +
+           `${make_prop("CDA_COMPONENT_NEW_VERSION", CDA_COMPONENT_NEW_VERSION)}`;
+}
 
 // expects build or deploy
 // build triggers Raiffeisen Build Automation with Ansible support
@@ -25,23 +54,46 @@ async function runScript() {
         core.debug(`action-type: ${actiontype}`);
         switch (actiontype.toLowerCase()) {
             case "build":
-                toolName = await io.which('bash', true)
+                process.env.WORKSPACE = WORKSPACE;
+                process.env.PRODUCT_NAME = CDA_PRODUCT_NAME;
+                process.env.COMPONENT_NAME = CDA_COMPONENT_NAME;
+                process.env.RELEASE = CDA_PRODUCT_RELEASE;
+                process.env.BUILD_NUMBER = process.env.MERLIN_BUILD_NUMBER;
+                process.env.VERSION = CDA_COMPONENT_NEW_VERSION;
+                process.env.PROJECTDIR = '/mnt/data/rba/rba-build-automation';
                 args = [
-                    'export PROJECTDIR=/mnt/data/rba/rba-build-automation ; ',
                     'source ${PROJECTDIR}/install/env.sh; ',
                     'source ${PROJECTDIR}/bin/common.sh; ',
                     'function prepare_gradle_template () { cp -r \"${PROJECTDIR}/templates/upload/\"\* \"${WORKSPACE}/\"; sed -i -e \"s/{productName}/${PRODUCT_NAME}/g\" \"${WORKSPACE}/build.gradle\"; sed -i -e \"s/{componentName}/${COMPONENT_NAME}/g\" \"${WORKSPACE}/settings.gradle\"; }; ',
                     'export -f prepare_gradle_template; ',
                     'source ${PROJECTDIR}/bin/build/ansible.sh; ',
                     'build',
-                ].join(' ')
+                ].join(' ');
+                toolName = await io.which('bash', true)
                 await exec.exec(`${toolName} -c \"${args}\"`);
                 await uploadBuildInfo();
                 break;
+
             case "deploy":
+                process.env.CDA_PROPERTIES = `${create_properties()}`;
+                process.env.CDA_PRODUCT_NAME = CDA_PRODUCT_NAME;
+                process.env.CDA_PRODUCT_RELEASE = CDA_PRODUCT_RELEASE;
+                process.env.CDA_COMPONENT_NAME = CDA_COMPONENT_NAME;
+                process.env.CDA_COMPONENT_NEW_VERSION = CDA_COMPONENT_NEW_VERSION;
+                process.env.CDA_COMPONENT_ALIAS = CDA_COMPONENT_ALIAS;
+                process.env.CDA_BRIDGE_REQUEST_ID = CDA_BRIDGE_REQUEST_ID;
+                process.env.CDA_REQUEST_ID = CDA_REQUEST_ID;
+                process.env.CDA_ENVIRONMENT = CDA_ENVIRONMENT;
+                process.env.ENVIRONMENT_ZONE_UPPER = ENVIRONMENT_ZONE_UPPER;
+                process.env.CDA_EXTRACT_PATH = CDA_EXTRACT_PATH;
+                args = [
+                    `cd ${CDA_EXTRACT_PATH}; `,
+                    'deploy.sh'
+                ].join(' ');
+                toolName = await io.which('bash', true)
                 await downloadBuildInfo();
                 await downloadAndExtract();
-                await exec.exec(`deploy.sh`);
+                await exec.exec(`${toolName} -c \"${args}\"`);
                 break;
             default:
                 core.setFailed('Not supported action-type. Supported action-type values: "build" or "deploy".');

@@ -2,17 +2,17 @@ module.exports =
 /******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
-/***/ 5456:
-/***/ ((__unused_webpack_module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 2792:
+/***/ ((__unused_webpack_module, __unused_webpack_exports, __nccwpck_require__) => {
 
 // RBI Merlin's Custom GitHub Action
 // Author: Gabor Horvath <gabor1.horvath at rbinternational.com>
 
-// GitHub Actions Toolkit 
-const core = __webpack_require__(5127);
-const exec = __webpack_require__(2049);
-const artifact = __webpack_require__(1413);
-const io = __webpack_require__(2864);
+// GitHub Actions Toolkit
+const core = __nccwpck_require__(6981);
+const exec = __nccwpck_require__(9232);
+const artifact = __nccwpck_require__(2024);
+const io = __nccwpck_require__(8444);
 
 // for artifact upload and download function
 const artifactName = 'buildInfo.json';
@@ -20,8 +20,37 @@ const files = [
     'build/cda/buildInfo.json'
 ]
 
+const CDA_COMPONENT_ALIAS = "svc";
+const CDA_BRIDGE_REQUEST_ID = process.env.GITHUB_RUN_ID;
+const CDA_REQUEST_ID = CDA_BRIDGE_REQUEST_ID;
+const CDA_EXTRACT_PATH = `${process.env.GITHUB_WORKSPACE}/${CDA_REQUEST_ID}`
+const CDA_PRODUCT_RELEASE = process.env.MERLIN_RELEASE
+const CDA_PRODUCT_NAME = process.env.MERLIN_PRODUCT_NAME
+const CDA_COMPONENT_NAME = process.env.MERLIN_COMPONENT_NAME
+const CDA_ENVIRONMENT = process.env.MERLIN_ENVIRONMENT
+const CDA_COMPONENT_NEW_VERSION=`${CDA_PRODUCT_RELEASE}.b${process.env.MERLIN_BUILD_NUMBER}`
+const ENVIRONMENT_ZONE_UPPER = process.env.MERLIN_ACCOUNT
+
+// vars required for the build
+const WORKSPACE = process.env.GITHUB_WORKSPACE
+
 // defines where to extract the artifact used for deployment
-var extractPath = process.env.CDA_EXTRACT_PATH;
+const extractPath = CDA_EXTRACT_PATH;
+
+// construct this weird CDA_PROPERTIES setting
+function create_properties() {
+    const make_prop = (k, v) => `export ${k}=${v}`
+
+    return `${make_prop("CDA_COMPONENT_ALIAS", CDA_COMPONENT_ALIAS)}\n` +
+           `${make_prop("CDA_BRIDGE_REQUEST_ID", CDA_BRIDGE_REQUEST_ID)}\n` +
+           `${make_prop("CDA_REQUEST_ID", CDA_REQUEST_ID)}\n` +
+           `${make_prop("CDA_EXTRACT_PATH", CDA_EXTRACT_PATH)}\n` +
+           `${make_prop("CDA_PRODUCT_RELEASE", CDA_PRODUCT_RELEASE)}\n` +
+           `${make_prop("CDA_PRODUCT_NAME", CDA_PRODUCT_NAME)}\n` +
+           `${make_prop("CDA_COMPONENT_NAME", CDA_COMPONENT_NAME)}\n` +
+           `${make_prop("CDA_ENVIRONMENT", CDA_ENVIRONMENT)}\n` +
+           `${make_prop("CDA_COMPONENT_NEW_VERSION", CDA_COMPONENT_NEW_VERSION)}`;
+}
 
 // expects build or deploy
 // build triggers Raiffeisen Build Automation with Ansible support
@@ -32,23 +61,46 @@ async function runScript() {
         core.debug(`action-type: ${actiontype}`);
         switch (actiontype.toLowerCase()) {
             case "build":
-                toolName = await io.which('bash', true)
+                process.env.WORKSPACE = WORKSPACE;
+                process.env.PRODUCT_NAME = CDA_PRODUCT_NAME;
+                process.env.COMPONENT_NAME = CDA_COMPONENT_NAME;
+                process.env.RELEASE = CDA_PRODUCT_RELEASE;
+                process.env.BUILD_NUMBER = process.env.MERLIN_BUILD_NUMBER;
+                process.env.VERSION = CDA_COMPONENT_NEW_VERSION;
+                process.env.PROJECTDIR = '/mnt/data/rba/rba-build-automation';
                 args = [
-                    'export PROJECTDIR=/mnt/data/rba/rba-build-automation ; ',
                     'source ${PROJECTDIR}/install/env.sh; ',
                     'source ${PROJECTDIR}/bin/common.sh; ',
                     'function prepare_gradle_template () { cp -r \"${PROJECTDIR}/templates/upload/\"\* \"${WORKSPACE}/\"; sed -i -e \"s/{productName}/${PRODUCT_NAME}/g\" \"${WORKSPACE}/build.gradle\"; sed -i -e \"s/{componentName}/${COMPONENT_NAME}/g\" \"${WORKSPACE}/settings.gradle\"; }; ',
                     'export -f prepare_gradle_template; ',
                     'source ${PROJECTDIR}/bin/build/ansible.sh; ',
                     'build',
-                ].join(' ')
+                ].join(' ');
+                toolName = await io.which('bash', true)
                 await exec.exec(`${toolName} -c \"${args}\"`);
                 await uploadBuildInfo();
                 break;
+
             case "deploy":
+                process.env.CDA_PROPERTIES = `${create_properties()}`;
+                process.env.CDA_PRODUCT_NAME = CDA_PRODUCT_NAME;
+                process.env.CDA_PRODUCT_RELEASE = CDA_PRODUCT_RELEASE;
+                process.env.CDA_COMPONENT_NAME = CDA_COMPONENT_NAME;
+                process.env.CDA_COMPONENT_NEW_VERSION = CDA_COMPONENT_NEW_VERSION;
+                process.env.CDA_COMPONENT_ALIAS = CDA_COMPONENT_ALIAS;
+                process.env.CDA_BRIDGE_REQUEST_ID = CDA_BRIDGE_REQUEST_ID;
+                process.env.CDA_REQUEST_ID = CDA_REQUEST_ID;
+                process.env.CDA_ENVIRONMENT = CDA_ENVIRONMENT;
+                process.env.ENVIRONMENT_ZONE_UPPER = ENVIRONMENT_ZONE_UPPER;
+                process.env.CDA_EXTRACT_PATH = CDA_EXTRACT_PATH;
+                args = [
+                    `cd ${CDA_EXTRACT_PATH}; `,
+                    'deploy.sh'
+                ].join(' ');
+                toolName = await io.which('bash', true)
                 await downloadBuildInfo();
                 await downloadAndExtract();
-                await exec.exec(`deploy.sh`);
+                await exec.exec(`${toolName} -c \"${args}\"`);
                 break;
             default:
                 core.setFailed('Not supported action-type. Supported action-type values: "build" or "deploy".');
@@ -97,7 +149,7 @@ async function downloadBuildInfo() {
 
 // reads artifactUrl from buildInfo.json
 const getNexusUrlSync = () => {
-    const fs = __webpack_require__(5747);
+    const fs = __nccwpck_require__(5747);
     const FILE_NAME = `${extractPath}/build/cda/buildInfo.json`;
     var dataJson = null;
     try {
@@ -114,8 +166,8 @@ const getNexusUrlSync = () => {
 
 // parses and returns artifactBaseName
 function getArtifactBaseName() {
-    var url = __webpack_require__(8835);
-    var path = __webpack_require__(5622);
+    var url = __nccwpck_require__(8835);
+    var path = __nccwpck_require__(5622);
     url1 = getNexusUrlSync();
     var parsed = url.parse(`${url1}`);
     core.debug(`parsed: ${parsed}`);
@@ -143,15 +195,16 @@ async function downloadAndExtract() {
 // main
 runScript();
 
+
 /***/ }),
 
-/***/ 1413:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 2024:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const artifact_client_1 = __webpack_require__(9157);
+const artifact_client_1 = __nccwpck_require__(9704);
 /**
  * Constructs an ArtifactClient
  */
@@ -163,8 +216,8 @@ exports.create = create;
 
 /***/ }),
 
-/***/ 9157:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 9704:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -185,14 +238,14 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const core = __importStar(__webpack_require__(5127));
-const upload_specification_1 = __webpack_require__(4591);
-const upload_http_client_1 = __webpack_require__(5811);
-const utils_1 = __webpack_require__(2241);
-const download_http_client_1 = __webpack_require__(6167);
-const download_specification_1 = __webpack_require__(9902);
-const config_variables_1 = __webpack_require__(5058);
-const path_1 = __webpack_require__(5622);
+const core = __importStar(__nccwpck_require__(6981));
+const upload_specification_1 = __nccwpck_require__(2037);
+const upload_http_client_1 = __nccwpck_require__(4164);
+const utils_1 = __nccwpck_require__(8084);
+const download_http_client_1 = __nccwpck_require__(6276);
+const download_specification_1 = __nccwpck_require__(929);
+const config_variables_1 = __nccwpck_require__(9935);
+const path_1 = __nccwpck_require__(5622);
 class DefaultArtifactClient {
     /**
      * Constructs a DefaultArtifactClient
@@ -319,7 +372,7 @@ exports.DefaultArtifactClient = DefaultArtifactClient;
 
 /***/ }),
 
-/***/ 5058:
+/***/ 9935:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -397,8 +450,8 @@ exports.getRetentionDays = getRetentionDays;
 
 /***/ }),
 
-/***/ 6167:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 6276:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -419,15 +472,16 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const fs = __importStar(__webpack_require__(5747));
-const core = __importStar(__webpack_require__(5127));
-const zlib = __importStar(__webpack_require__(8761));
-const utils_1 = __webpack_require__(2241);
-const url_1 = __webpack_require__(8835);
-const status_reporter_1 = __webpack_require__(6577);
-const perf_hooks_1 = __webpack_require__(630);
-const http_manager_1 = __webpack_require__(3859);
-const config_variables_1 = __webpack_require__(5058);
+const fs = __importStar(__nccwpck_require__(5747));
+const core = __importStar(__nccwpck_require__(6981));
+const zlib = __importStar(__nccwpck_require__(8761));
+const utils_1 = __nccwpck_require__(8084);
+const url_1 = __nccwpck_require__(8835);
+const status_reporter_1 = __nccwpck_require__(1683);
+const perf_hooks_1 = __nccwpck_require__(630);
+const http_manager_1 = __nccwpck_require__(7147);
+const config_variables_1 = __nccwpck_require__(9935);
+const requestUtils_1 = __nccwpck_require__(1608);
 class DownloadHttpClient {
     constructor() {
         this.downloadHttpManager = new http_manager_1.HttpManager(config_variables_1.getDownloadFileConcurrency(), '@actions/artifact-download');
@@ -443,13 +497,9 @@ class DownloadHttpClient {
             // use the first client from the httpManager, `keep-alive` is not used so the connection will close immediately
             const client = this.downloadHttpManager.getClient(0);
             const headers = utils_1.getDownloadHeaders('application/json');
-            const response = yield client.get(artifactUrl, headers);
+            const response = yield requestUtils_1.retryHttpClientRequest('List Artifacts', () => __awaiter(this, void 0, void 0, function* () { return client.get(artifactUrl, headers); }));
             const body = yield response.readBody();
-            if (utils_1.isSuccessStatusCode(response.message.statusCode) && body) {
-                return JSON.parse(body);
-            }
-            utils_1.displayHttpDiagnostics(response);
-            throw new Error(`Unable to list artifacts for the run. Resource Url ${artifactUrl}`);
+            return JSON.parse(body);
         });
     }
     /**
@@ -465,13 +515,9 @@ class DownloadHttpClient {
             // use the first client from the httpManager, `keep-alive` is not used so the connection will close immediately
             const client = this.downloadHttpManager.getClient(0);
             const headers = utils_1.getDownloadHeaders('application/json');
-            const response = yield client.get(resourceUrl.toString(), headers);
+            const response = yield requestUtils_1.retryHttpClientRequest('Get Container Items', () => __awaiter(this, void 0, void 0, function* () { return client.get(resourceUrl.toString(), headers); }));
             const body = yield response.readBody();
-            if (utils_1.isSuccessStatusCode(response.message.statusCode) && body) {
-                return JSON.parse(body);
-            }
-            utils_1.displayHttpDiagnostics(response);
-            throw new Error(`Unable to get ContainersItems from ${resourceUrl}`);
+            return JSON.parse(body);
         });
     }
     /**
@@ -521,7 +567,7 @@ class DownloadHttpClient {
         return __awaiter(this, void 0, void 0, function* () {
             let retryCount = 0;
             const retryLimit = config_variables_1.getRetryLimit();
-            const destinationStream = fs.createWriteStream(downloadPath);
+            let destinationStream = fs.createWriteStream(downloadPath);
             const headers = utils_1.getDownloadHeaders('application/json', true, true);
             // a single GET request is used to download a file
             const makeDownloadRequest = () => __awaiter(this, void 0, void 0, function* () {
@@ -546,22 +592,40 @@ class DownloadHttpClient {
                     if (retryAfterValue) {
                         // Back off by waiting the specified time denoted by the retry-after header
                         core.info(`Backoff due to too many requests, retry #${retryCount}. Waiting for ${retryAfterValue} milliseconds before continuing the download`);
-                        yield new Promise(resolve => setTimeout(resolve, retryAfterValue));
+                        yield utils_1.sleep(retryAfterValue);
                     }
                     else {
                         // Back off using an exponential value that depends on the retry count
                         const backoffTime = utils_1.getExponentialRetryTimeInMilliseconds(retryCount);
                         core.info(`Exponential backoff for retry #${retryCount}. Waiting for ${backoffTime} milliseconds before continuing the download`);
-                        yield new Promise(resolve => setTimeout(resolve, backoffTime));
+                        yield utils_1.sleep(backoffTime);
                     }
                     core.info(`Finished backoff for retry #${retryCount}, continuing with download`);
                 }
+            });
+            const isAllBytesReceived = (expected, received) => {
+                // be lenient, if any input is missing, assume success, i.e. not truncated
+                if (!expected ||
+                    !received ||
+                    process.env['ACTIONS_ARTIFACT_SKIP_DOWNLOAD_VALIDATION']) {
+                    core.info('Skipping download validation.');
+                    return true;
+                }
+                return parseInt(expected) === received;
+            };
+            const resetDestinationStream = (fileDownloadPath) => __awaiter(this, void 0, void 0, function* () {
+                destinationStream.close();
+                yield utils_1.rmFile(fileDownloadPath);
+                destinationStream = fs.createWriteStream(fileDownloadPath);
             });
             // keep trying to download a file until a retry limit has been reached
             while (retryCount <= retryLimit) {
                 let response;
                 try {
                     response = yield makeDownloadRequest();
+                    if (core.isDebug()) {
+                        utils_1.displayHttpDiagnostics(response);
+                    }
                 }
                 catch (error) {
                     // if an error is caught, it is usually indicative of a timeout so retry the download
@@ -572,14 +636,30 @@ class DownloadHttpClient {
                     yield backOff();
                     continue;
                 }
+                let forceRetry = false;
                 if (utils_1.isSuccessStatusCode(response.message.statusCode)) {
                     // The body contains the contents of the file however calling response.readBody() causes all the content to be converted to a string
                     // which can cause some gzip encoded data to be lost
                     // Instead of using response.readBody(), response.message is a readableStream that can be directly used to get the raw body contents
-                    return this.pipeResponseToFile(response, destinationStream, isGzip(response.message.headers));
+                    try {
+                        const isGzipped = isGzip(response.message.headers);
+                        yield this.pipeResponseToFile(response, destinationStream, isGzipped);
+                        if (isGzipped ||
+                            isAllBytesReceived(response.message.headers['content-length'], yield utils_1.getFileSize(downloadPath))) {
+                            return;
+                        }
+                        else {
+                            forceRetry = true;
+                        }
+                    }
+                    catch (error) {
+                        // retry on error, most likely streams were corrupted
+                        forceRetry = true;
+                    }
                 }
-                else if (utils_1.isRetryableStatusCode(response.message.statusCode)) {
+                if (forceRetry || utils_1.isRetryableStatusCode(response.message.statusCode)) {
                     core.info(`A ${response.message.statusCode} response code has been received while attempting to download an artifact`);
+                    resetDestinationStream(downloadPath);
                     // if a throttled status code is received, try to get the retryAfter header value, else differ to standard exponential backoff
                     utils_1.isThrottledStatusCode(response.message.statusCode)
                         ? yield backOff(utils_1.tryGetRetryAfterValueTimeInMilliseconds(response.message.headers))
@@ -605,24 +685,40 @@ class DownloadHttpClient {
                 if (isGzip) {
                     const gunzip = zlib.createGunzip();
                     response.message
+                        .on('error', error => {
+                        core.error(`An error occurred while attempting to read the response stream`);
+                        gunzip.close();
+                        destinationStream.close();
+                        reject(error);
+                    })
                         .pipe(gunzip)
+                        .on('error', error => {
+                        core.error(`An error occurred while attempting to decompress the response stream`);
+                        destinationStream.close();
+                        reject(error);
+                    })
                         .pipe(destinationStream)
                         .on('close', () => {
                         resolve();
                     })
                         .on('error', error => {
-                        core.error(`An error has been encountered while decompressing and writing a downloaded file to ${destinationStream.path}`);
+                        core.error(`An error occurred while writing a downloaded file to ${destinationStream.path}`);
                         reject(error);
                     });
                 }
                 else {
                     response.message
+                        .on('error', error => {
+                        core.error(`An error occurred while attempting to read the response stream`);
+                        destinationStream.close();
+                        reject(error);
+                    })
                         .pipe(destinationStream)
                         .on('close', () => {
                         resolve();
                     })
                         .on('error', error => {
-                        core.error(`An error has been encountered while writing a downloaded file to ${destinationStream.path}`);
+                        core.error(`An error occurred while writing a downloaded file to ${destinationStream.path}`);
                         reject(error);
                     });
                 }
@@ -636,8 +732,8 @@ exports.DownloadHttpClient = DownloadHttpClient;
 
 /***/ }),
 
-/***/ 9902:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 929:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -649,7 +745,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const path = __importStar(__webpack_require__(5622));
+const path = __importStar(__nccwpck_require__(5622));
 /**
  * Creates a specification for a set of files that will be downloaded
  * @param artifactName the name of the artifact
@@ -704,13 +800,13 @@ exports.getDownloadSpecification = getDownloadSpecification;
 
 /***/ }),
 
-/***/ 3859:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 7147:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const utils_1 = __webpack_require__(2241);
+const utils_1 = __nccwpck_require__(8084);
 /**
  * Used for managing http clients during either upload or download
  */
@@ -742,13 +838,95 @@ exports.HttpManager = HttpManager;
 
 /***/ }),
 
-/***/ 6577:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 1608:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+    result["default"] = mod;
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const utils_1 = __nccwpck_require__(8084);
+const core = __importStar(__nccwpck_require__(6981));
+const config_variables_1 = __nccwpck_require__(9935);
+function retry(name, operation, customErrorMessages, maxAttempts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let response = undefined;
+        let statusCode = undefined;
+        let isRetryable = false;
+        let errorMessage = '';
+        let customErrorInformation = undefined;
+        let attempt = 1;
+        while (attempt <= maxAttempts) {
+            try {
+                response = yield operation();
+                statusCode = response.message.statusCode;
+                if (utils_1.isSuccessStatusCode(statusCode)) {
+                    return response;
+                }
+                // Extra error information that we want to display if a particular response code is hit
+                if (statusCode) {
+                    customErrorInformation = customErrorMessages.get(statusCode);
+                }
+                isRetryable = utils_1.isRetryableStatusCode(statusCode);
+                errorMessage = `Artifact service responded with ${statusCode}`;
+            }
+            catch (error) {
+                isRetryable = true;
+                errorMessage = error.message;
+            }
+            if (!isRetryable) {
+                core.info(`${name} - Error is not retryable`);
+                if (response) {
+                    utils_1.displayHttpDiagnostics(response);
+                }
+                break;
+            }
+            core.info(`${name} - Attempt ${attempt} of ${maxAttempts} failed with error: ${errorMessage}`);
+            yield utils_1.sleep(utils_1.getExponentialRetryTimeInMilliseconds(attempt));
+            attempt++;
+        }
+        if (response) {
+            utils_1.displayHttpDiagnostics(response);
+        }
+        if (customErrorInformation) {
+            throw Error(`${name} failed: ${customErrorInformation}`);
+        }
+        throw Error(`${name} failed: ${errorMessage}`);
+    });
+}
+exports.retry = retry;
+function retryHttpClientRequest(name, method, customErrorMessages = new Map(), maxAttempts = config_variables_1.getRetryLimit()) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return yield retry(name, method, customErrorMessages, maxAttempts);
+    });
+}
+exports.retryHttpClientRequest = retryHttpClientRequest;
+//# sourceMappingURL=requestUtils.js.map
+
+/***/ }),
+
+/***/ 1683:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const core_1 = __webpack_require__(5127);
+const core_1 = __nccwpck_require__(6981);
 /**
  * Status Reporter that displays information about the progress/status of an artifact that is being uploaded or downloaded
  *
@@ -813,8 +991,8 @@ exports.StatusReporter = StatusReporter;
 
 /***/ }),
 
-/***/ 5832:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 4548:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -842,9 +1020,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const fs = __importStar(__webpack_require__(5747));
-const zlib = __importStar(__webpack_require__(8761));
-const util_1 = __webpack_require__(1669);
+const fs = __importStar(__nccwpck_require__(5747));
+const zlib = __importStar(__nccwpck_require__(8761));
+const util_1 = __nccwpck_require__(1669);
 const stat = util_1.promisify(fs.stat);
 /**
  * Creates a Gzip compressed file of an original file at the provided temporary filepath location
@@ -909,8 +1087,8 @@ exports.createGZipFileInBuffer = createGZipFileInBuffer;
 
 /***/ }),
 
-/***/ 5811:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 4164:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -931,18 +1109,20 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const fs = __importStar(__webpack_require__(5747));
-const core = __importStar(__webpack_require__(5127));
-const tmp = __importStar(__webpack_require__(3049));
-const stream = __importStar(__webpack_require__(2413));
-const utils_1 = __webpack_require__(2241);
-const config_variables_1 = __webpack_require__(5058);
-const util_1 = __webpack_require__(1669);
-const url_1 = __webpack_require__(8835);
-const perf_hooks_1 = __webpack_require__(630);
-const status_reporter_1 = __webpack_require__(6577);
-const http_manager_1 = __webpack_require__(3859);
-const upload_gzip_1 = __webpack_require__(5832);
+const fs = __importStar(__nccwpck_require__(5747));
+const core = __importStar(__nccwpck_require__(6981));
+const tmp = __importStar(__nccwpck_require__(8624));
+const stream = __importStar(__nccwpck_require__(2413));
+const utils_1 = __nccwpck_require__(8084);
+const config_variables_1 = __nccwpck_require__(9935);
+const util_1 = __nccwpck_require__(1669);
+const url_1 = __nccwpck_require__(8835);
+const perf_hooks_1 = __nccwpck_require__(630);
+const status_reporter_1 = __nccwpck_require__(1683);
+const http_client_1 = __nccwpck_require__(6063);
+const http_manager_1 = __nccwpck_require__(7147);
+const upload_gzip_1 = __nccwpck_require__(4548);
+const requestUtils_1 = __nccwpck_require__(1608);
 const stat = util_1.promisify(fs.stat);
 class UploadHttpClient {
     constructor() {
@@ -970,20 +1150,22 @@ class UploadHttpClient {
             // use the first client from the httpManager, `keep-alive` is not used so the connection will close immediately
             const client = this.uploadHttpManager.getClient(0);
             const headers = utils_1.getUploadHeaders('application/json', false);
-            const rawResponse = yield client.post(artifactUrl, data, headers);
-            const body = yield rawResponse.readBody();
-            if (utils_1.isSuccessStatusCode(rawResponse.message.statusCode) && body) {
-                return JSON.parse(body);
-            }
-            else if (utils_1.isForbiddenStatusCode(rawResponse.message.statusCode)) {
-                // if a 403 is returned when trying to create a file container, the customer has exceeded
-                // their storage quota so no new artifact containers can be created
-                throw new Error(`Artifact storage quota has been hit. Unable to upload any new artifacts`);
-            }
-            else {
-                utils_1.displayHttpDiagnostics(rawResponse);
-                throw new Error(`Unable to create a container for the artifact ${artifactName} at ${artifactUrl}`);
-            }
+            // Extra information to display when a particular HTTP code is returned
+            // If a 403 is returned when trying to create a file container, the customer has exceeded
+            // their storage quota so no new artifact containers can be created
+            const customErrorMessages = new Map([
+                [
+                    http_client_1.HttpCodes.Forbidden,
+                    'Artifact storage quota has been hit. Unable to upload any new artifacts'
+                ],
+                [
+                    http_client_1.HttpCodes.BadRequest,
+                    `The artifact name ${artifactName} is not valid. Request URL ${artifactUrl}`
+                ]
+            ]);
+            const response = yield requestUtils_1.retryHttpClientRequest('Create Artifact Container', () => __awaiter(this, void 0, void 0, function* () { return client.post(artifactUrl, data, headers); }), customErrorMessages);
+            const body = yield response.readBody();
+            return JSON.parse(body);
         });
     }
     /**
@@ -1207,12 +1389,12 @@ class UploadHttpClient {
                 this.uploadHttpManager.disposeAndReplaceClient(httpClientIndex);
                 if (retryAfterValue) {
                     core.info(`Backoff due to too many requests, retry #${retryCount}. Waiting for ${retryAfterValue} milliseconds before continuing the upload`);
-                    yield new Promise(resolve => setTimeout(resolve, retryAfterValue));
+                    yield utils_1.sleep(retryAfterValue);
                 }
                 else {
                     const backoffTime = utils_1.getExponentialRetryTimeInMilliseconds(retryCount);
                     core.info(`Exponential backoff for retry #${retryCount}. Waiting for ${backoffTime} milliseconds before continuing the upload at offset ${start}`);
-                    yield new Promise(resolve => setTimeout(resolve, backoffTime));
+                    yield utils_1.sleep(backoffTime);
                 }
                 core.info(`Finished backoff for retry #${retryCount}, continuing with upload`);
                 return;
@@ -1264,7 +1446,6 @@ class UploadHttpClient {
      */
     patchArtifactSize(size, artifactName) {
         return __awaiter(this, void 0, void 0, function* () {
-            const headers = utils_1.getUploadHeaders('application/json', false);
             const resourceUrl = new url_1.URL(utils_1.getArtifactUrl());
             resourceUrl.searchParams.append('artifactName', artifactName);
             const parameters = { Size: size };
@@ -1272,19 +1453,18 @@ class UploadHttpClient {
             core.debug(`URL is ${resourceUrl.toString()}`);
             // use the first client from the httpManager, `keep-alive` is not used so the connection will close immediately
             const client = this.uploadHttpManager.getClient(0);
-            const response = yield client.patch(resourceUrl.toString(), data, headers);
-            const body = yield response.readBody();
-            if (utils_1.isSuccessStatusCode(response.message.statusCode)) {
-                core.debug(`Artifact ${artifactName} has been successfully uploaded, total size in bytes: ${size}`);
-            }
-            else if (response.message.statusCode === 404) {
-                throw new Error(`An Artifact with the name ${artifactName} was not found`);
-            }
-            else {
-                utils_1.displayHttpDiagnostics(response);
-                core.info(body);
-                throw new Error(`Unable to finish uploading artifact ${artifactName} to ${resourceUrl}`);
-            }
+            const headers = utils_1.getUploadHeaders('application/json', false);
+            // Extra information to display when a particular HTTP code is returned
+            const customErrorMessages = new Map([
+                [
+                    http_client_1.HttpCodes.NotFound,
+                    `An Artifact with the name ${artifactName} was not found`
+                ]
+            ]);
+            // TODO retry for all possible response codes, the artifact upload is pretty much complete so it at all costs we should try to finish this
+            const response = yield requestUtils_1.retryHttpClientRequest('Finalize artifact upload', () => __awaiter(this, void 0, void 0, function* () { return client.patch(resourceUrl.toString(), data, headers); }), customErrorMessages);
+            yield response.readBody();
+            core.debug(`Artifact ${artifactName} has been successfully uploaded, total size in bytes: ${size}`);
         });
     }
 }
@@ -1293,8 +1473,8 @@ exports.UploadHttpClient = UploadHttpClient;
 
 /***/ }),
 
-/***/ 4591:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 2037:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -1306,10 +1486,10 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const fs = __importStar(__webpack_require__(5747));
-const core_1 = __webpack_require__(5127);
-const path_1 = __webpack_require__(5622);
-const utils_1 = __webpack_require__(2241);
+const fs = __importStar(__nccwpck_require__(5747));
+const core_1 = __nccwpck_require__(6981);
+const path_1 = __nccwpck_require__(5622);
+const utils_1 = __nccwpck_require__(8084);
 /**
  * Creates a specification that describes how each file that is part of the artifact will be uploaded
  * @param artifactName the name of the artifact being uploaded. Used during upload to denote where the artifact is stored on the server
@@ -1388,8 +1568,8 @@ exports.getUploadSpecification = getUploadSpecification;
 
 /***/ }),
 
-/***/ 2241:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 8084:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -1403,11 +1583,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const core_1 = __webpack_require__(5127);
-const fs_1 = __webpack_require__(5747);
-const http_client_1 = __webpack_require__(1840);
-const auth_1 = __webpack_require__(9421);
-const config_variables_1 = __webpack_require__(5058);
+const core_1 = __nccwpck_require__(6981);
+const fs_1 = __nccwpck_require__(5747);
+const http_client_1 = __nccwpck_require__(6063);
+const auth_1 = __nccwpck_require__(8209);
+const config_variables_1 = __nccwpck_require__(9935);
 /**
  * Returns a retry time in milliseconds that exponentially gets larger
  * depending on the amount of retries that have been attempted
@@ -1660,6 +1840,20 @@ function createEmptyFilesForArtifact(emptyFilesToCreate) {
     });
 }
 exports.createEmptyFilesForArtifact = createEmptyFilesForArtifact;
+function getFileSize(filePath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const stats = yield fs_1.promises.stat(filePath);
+        core_1.debug(`${filePath} size:(${stats.size}) blksize:(${stats.blksize}) blocks:(${stats.blocks})`);
+        return stats.size;
+    });
+}
+exports.getFileSize = getFileSize;
+function rmFile(filePath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield fs_1.promises.unlink(filePath);
+    });
+}
+exports.rmFile = rmFile;
 function getProperRetention(retentionInput, retentionSetting) {
     if (retentionInput < 0) {
         throw new Error('Invalid retention, minimum value is 1.');
@@ -1675,12 +1869,18 @@ function getProperRetention(retentionInput, retentionSetting) {
     return retention;
 }
 exports.getProperRetention = getProperRetention;
+function sleep(milliseconds) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise(resolve => setTimeout(resolve, milliseconds));
+    });
+}
+exports.sleep = sleep;
 //# sourceMappingURL=utils.js.map
 
 /***/ }),
 
-/***/ 5604:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 5712:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -1692,8 +1892,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const os = __importStar(__webpack_require__(2087));
-const utils_1 = __webpack_require__(1245);
+const os = __importStar(__nccwpck_require__(2087));
+const utils_1 = __nccwpck_require__(6459);
 /**
  * Commands
  *
@@ -1765,8 +1965,8 @@ function escapeProperty(s) {
 
 /***/ }),
 
-/***/ 5127:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 6981:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -1787,11 +1987,11 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const command_1 = __webpack_require__(5604);
-const file_command_1 = __webpack_require__(7352);
-const utils_1 = __webpack_require__(1245);
-const os = __importStar(__webpack_require__(2087));
-const path = __importStar(__webpack_require__(5622));
+const command_1 = __nccwpck_require__(5712);
+const file_command_1 = __nccwpck_require__(4122);
+const utils_1 = __nccwpck_require__(6459);
+const os = __importStar(__nccwpck_require__(2087));
+const path = __importStar(__nccwpck_require__(5622));
 /**
  * The code to exit an action
  */
@@ -2010,8 +2210,8 @@ exports.getState = getState;
 
 /***/ }),
 
-/***/ 7352:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 4122:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -2026,9 +2226,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const fs = __importStar(__webpack_require__(5747));
-const os = __importStar(__webpack_require__(2087));
-const utils_1 = __webpack_require__(1245);
+const fs = __importStar(__nccwpck_require__(5747));
+const os = __importStar(__nccwpck_require__(2087));
+const utils_1 = __nccwpck_require__(6459);
 function issueCommand(command, message) {
     const filePath = process.env[`GITHUB_${command}`];
     if (!filePath) {
@@ -2046,7 +2246,7 @@ exports.issueCommand = issueCommand;
 
 /***/ }),
 
-/***/ 1245:
+/***/ 6459:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -2072,8 +2272,8 @@ exports.toCommandValue = toCommandValue;
 
 /***/ }),
 
-/***/ 2049:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 9232:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -2094,7 +2294,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const tr = __importStar(__webpack_require__(1469));
+const tr = __importStar(__nccwpck_require__(2386));
 /**
  * Exec a command.
  * Output will be streamed to the live console.
@@ -2123,8 +2323,8 @@ exports.exec = exec;
 
 /***/ }),
 
-/***/ 1469:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 2386:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -2145,12 +2345,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const os = __importStar(__webpack_require__(2087));
-const events = __importStar(__webpack_require__(8614));
-const child = __importStar(__webpack_require__(3129));
-const path = __importStar(__webpack_require__(5622));
-const io = __importStar(__webpack_require__(2864));
-const ioUtil = __importStar(__webpack_require__(1887));
+const os = __importStar(__nccwpck_require__(2087));
+const events = __importStar(__nccwpck_require__(8614));
+const child = __importStar(__nccwpck_require__(3129));
+const path = __importStar(__nccwpck_require__(5622));
+const io = __importStar(__nccwpck_require__(8444));
+const ioUtil = __importStar(__nccwpck_require__(893));
 /* eslint-disable @typescript-eslint/unbound-method */
 const IS_WINDOWS = process.platform === 'win32';
 /*
@@ -2730,7 +2930,7 @@ class ExecState extends events.EventEmitter {
 
 /***/ }),
 
-/***/ 9421:
+/***/ 8209:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -2796,16 +2996,15 @@ exports.PersonalAccessTokenCredentialHandler = PersonalAccessTokenCredentialHand
 
 /***/ }),
 
-/***/ 1840:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 6063:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const url = __webpack_require__(8835);
-const http = __webpack_require__(8605);
-const https = __webpack_require__(7211);
-const pm = __webpack_require__(8045);
+const http = __nccwpck_require__(8605);
+const https = __nccwpck_require__(7211);
+const pm = __nccwpck_require__(5572);
 let tunnel;
 var HttpCodes;
 (function (HttpCodes) {
@@ -2851,7 +3050,7 @@ var MediaTypes;
  * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
  */
 function getProxyUrl(serverUrl) {
-    let proxyUrl = pm.getProxyUrl(url.parse(serverUrl));
+    let proxyUrl = pm.getProxyUrl(new URL(serverUrl));
     return proxyUrl ? proxyUrl.href : '';
 }
 exports.getProxyUrl = getProxyUrl;
@@ -2870,6 +3069,15 @@ const HttpResponseRetryCodes = [
 const RetryableHttpVerbs = ['OPTIONS', 'GET', 'DELETE', 'HEAD'];
 const ExponentialBackoffCeiling = 10;
 const ExponentialBackoffTimeSlice = 5;
+class HttpClientError extends Error {
+    constructor(message, statusCode) {
+        super(message);
+        this.name = 'HttpClientError';
+        this.statusCode = statusCode;
+        Object.setPrototypeOf(this, HttpClientError.prototype);
+    }
+}
+exports.HttpClientError = HttpClientError;
 class HttpClientResponse {
     constructor(message) {
         this.message = message;
@@ -2888,7 +3096,7 @@ class HttpClientResponse {
 }
 exports.HttpClientResponse = HttpClientResponse;
 function isHttps(requestUrl) {
-    let parsedUrl = url.parse(requestUrl);
+    let parsedUrl = new URL(requestUrl);
     return parsedUrl.protocol === 'https:';
 }
 exports.isHttps = isHttps;
@@ -2993,7 +3201,7 @@ class HttpClient {
         if (this._disposed) {
             throw new Error('Client has already been disposed.');
         }
-        let parsedUrl = url.parse(requestUrl);
+        let parsedUrl = new URL(requestUrl);
         let info = this._prepareRequest(verb, parsedUrl, headers);
         // Only perform retries on reads since writes may not be idempotent.
         let maxTries = this._allowRetries && RetryableHttpVerbs.indexOf(verb) != -1
@@ -3032,7 +3240,7 @@ class HttpClient {
                     // if there's no location to redirect to, we won't
                     break;
                 }
-                let parsedRedirectUrl = url.parse(redirectUrl);
+                let parsedRedirectUrl = new URL(redirectUrl);
                 if (parsedUrl.protocol == 'https:' &&
                     parsedUrl.protocol != parsedRedirectUrl.protocol &&
                     !this._allowRedirectDowngrade) {
@@ -3148,7 +3356,7 @@ class HttpClient {
      * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
      */
     getAgent(serverUrl) {
-        let parsedUrl = url.parse(serverUrl);
+        let parsedUrl = new URL(serverUrl);
         return this._getAgent(parsedUrl);
     }
     _prepareRequest(method, requestUrl, headers) {
@@ -3215,13 +3423,13 @@ class HttpClient {
         if (useProxy) {
             // If using proxy, need tunnel
             if (!tunnel) {
-                tunnel = __webpack_require__(7265);
+                tunnel = __nccwpck_require__(4387);
             }
             const agentOptions = {
                 maxSockets: maxSockets,
                 keepAlive: this._keepAlive,
                 proxy: {
-                    proxyAuth: proxyUrl.auth,
+                    proxyAuth: `${proxyUrl.username}:${proxyUrl.password}`,
                     host: proxyUrl.hostname,
                     port: proxyUrl.port
                 }
@@ -3316,12 +3524,8 @@ class HttpClient {
                 else {
                     msg = 'Failed request: (' + statusCode + ')';
                 }
-                let err = new Error(msg);
-                // attach statusCode and body obj (if available) to the error object
-                err['statusCode'] = statusCode;
-                if (response.result) {
-                    err['result'] = response.result;
-                }
+                let err = new HttpClientError(msg, statusCode);
+                err.result = response.result;
                 reject(err);
             }
             else {
@@ -3335,13 +3539,12 @@ exports.HttpClient = HttpClient;
 
 /***/ }),
 
-/***/ 8045:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 5572:
+/***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const url = __webpack_require__(8835);
 function getProxyUrl(reqUrl) {
     let usingSsl = reqUrl.protocol === 'https:';
     let proxyUrl;
@@ -3356,7 +3559,7 @@ function getProxyUrl(reqUrl) {
         proxyVar = process.env['http_proxy'] || process.env['HTTP_PROXY'];
     }
     if (proxyVar) {
-        proxyUrl = url.parse(proxyVar);
+        proxyUrl = new URL(proxyVar);
     }
     return proxyUrl;
 }
@@ -3401,8 +3604,8 @@ exports.checkBypass = checkBypass;
 
 /***/ }),
 
-/***/ 1887:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 893:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -3417,9 +3620,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 var _a;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const assert_1 = __webpack_require__(2357);
-const fs = __webpack_require__(5747);
-const path = __webpack_require__(5622);
+const assert_1 = __nccwpck_require__(2357);
+const fs = __nccwpck_require__(5747);
+const path = __nccwpck_require__(5622);
 _a = fs.promises, exports.chmod = _a.chmod, exports.copyFile = _a.copyFile, exports.lstat = _a.lstat, exports.mkdir = _a.mkdir, exports.readdir = _a.readdir, exports.readlink = _a.readlink, exports.rename = _a.rename, exports.rmdir = _a.rmdir, exports.stat = _a.stat, exports.symlink = _a.symlink, exports.unlink = _a.unlink;
 exports.IS_WINDOWS = process.platform === 'win32';
 function exists(fsPath) {
@@ -3603,8 +3806,8 @@ function isUnixExecutable(stats) {
 
 /***/ }),
 
-/***/ 2864:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ 8444:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -3618,10 +3821,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const childProcess = __webpack_require__(3129);
-const path = __webpack_require__(5622);
-const util_1 = __webpack_require__(1669);
-const ioUtil = __webpack_require__(1887);
+const childProcess = __nccwpck_require__(3129);
+const path = __nccwpck_require__(5622);
+const util_1 = __nccwpck_require__(1669);
+const ioUtil = __nccwpck_require__(893);
 const exec = util_1.promisify(childProcess.exec);
 /**
  * Copies a file or folder.
@@ -3900,7 +4103,7 @@ function copyFile(srcFile, destFile, force) {
 
 /***/ }),
 
-/***/ 3819:
+/***/ 5457:
 /***/ ((module) => {
 
 "use strict";
@@ -3967,11 +4170,11 @@ function range(a, b, str) {
 
 /***/ }),
 
-/***/ 1190:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 7167:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var concatMap = __webpack_require__(78);
-var balanced = __webpack_require__(3819);
+var concatMap = __nccwpck_require__(4843);
+var balanced = __nccwpck_require__(5457);
 
 module.exports = expandTop;
 
@@ -4175,7 +4378,7 @@ function expand(str, isTop) {
 
 /***/ }),
 
-/***/ 78:
+/***/ 4843:
 /***/ ((module) => {
 
 module.exports = function (xs, fn) {
@@ -4195,8 +4398,8 @@ var isArray = Array.isArray || function (xs) {
 
 /***/ }),
 
-/***/ 2229:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 8521:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 module.exports = realpath
 realpath.realpath = realpath
@@ -4205,13 +4408,13 @@ realpath.realpathSync = realpathSync
 realpath.monkeypatch = monkeypatch
 realpath.unmonkeypatch = unmonkeypatch
 
-var fs = __webpack_require__(5747)
+var fs = __nccwpck_require__(5747)
 var origRealpath = fs.realpath
 var origRealpathSync = fs.realpathSync
 
 var version = process.version
 var ok = /^v[0-5]\./.test(version)
-var old = __webpack_require__(6035)
+var old = __nccwpck_require__(9768)
 
 function newError (er) {
   return er && er.syscall === 'realpath' && (
@@ -4268,8 +4471,8 @@ function unmonkeypatch () {
 
 /***/ }),
 
-/***/ 6035:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 9768:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -4292,9 +4495,9 @@ function unmonkeypatch () {
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var pathModule = __webpack_require__(5622);
+var pathModule = __nccwpck_require__(5622);
 var isWindows = process.platform === 'win32';
-var fs = __webpack_require__(5747);
+var fs = __nccwpck_require__(5747);
 
 // JavaScript implementation of realpath, ported from node pre-v6
 
@@ -4578,8 +4781,8 @@ exports.realpath = function realpath(p, cache, cb) {
 
 /***/ }),
 
-/***/ 20:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 6513:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 exports.alphasort = alphasort
 exports.alphasorti = alphasorti
@@ -4595,9 +4798,9 @@ function ownProp (obj, field) {
   return Object.prototype.hasOwnProperty.call(obj, field)
 }
 
-var path = __webpack_require__(5622)
-var minimatch = __webpack_require__(6930)
-var isAbsolute = __webpack_require__(4257)
+var path = __nccwpck_require__(5622)
+var minimatch = __nccwpck_require__(2113)
+var isAbsolute = __nccwpck_require__(7330)
 var Minimatch = minimatch.Minimatch
 
 function alphasorti (a, b) {
@@ -4825,8 +5028,8 @@ function childrenIgnored (self, path) {
 
 /***/ }),
 
-/***/ 7545:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 3870:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 // Approach:
 //
@@ -4870,27 +5073,27 @@ function childrenIgnored (self, path) {
 
 module.exports = glob
 
-var fs = __webpack_require__(5747)
-var rp = __webpack_require__(2229)
-var minimatch = __webpack_require__(6930)
+var fs = __nccwpck_require__(5747)
+var rp = __nccwpck_require__(8521)
+var minimatch = __nccwpck_require__(2113)
 var Minimatch = minimatch.Minimatch
-var inherits = __webpack_require__(2150)
-var EE = __webpack_require__(8614).EventEmitter
-var path = __webpack_require__(5622)
-var assert = __webpack_require__(2357)
-var isAbsolute = __webpack_require__(4257)
-var globSync = __webpack_require__(28)
-var common = __webpack_require__(20)
+var inherits = __nccwpck_require__(1233)
+var EE = __nccwpck_require__(8614).EventEmitter
+var path = __nccwpck_require__(5622)
+var assert = __nccwpck_require__(2357)
+var isAbsolute = __nccwpck_require__(7330)
+var globSync = __nccwpck_require__(5231)
+var common = __nccwpck_require__(6513)
 var alphasort = common.alphasort
 var alphasorti = common.alphasorti
 var setopts = common.setopts
 var ownProp = common.ownProp
-var inflight = __webpack_require__(5867)
-var util = __webpack_require__(1669)
+var inflight = __nccwpck_require__(8756)
+var util = __nccwpck_require__(1669)
 var childrenIgnored = common.childrenIgnored
 var isIgnored = common.isIgnored
 
-var once = __webpack_require__(8666)
+var once = __nccwpck_require__(825)
 
 function glob (pattern, options, cb) {
   if (typeof options === 'function') cb = options, options = {}
@@ -5622,22 +5825,22 @@ Glob.prototype._stat2 = function (f, abs, er, stat, cb) {
 
 /***/ }),
 
-/***/ 28:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 5231:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 module.exports = globSync
 globSync.GlobSync = GlobSync
 
-var fs = __webpack_require__(5747)
-var rp = __webpack_require__(2229)
-var minimatch = __webpack_require__(6930)
+var fs = __nccwpck_require__(5747)
+var rp = __nccwpck_require__(8521)
+var minimatch = __nccwpck_require__(2113)
 var Minimatch = minimatch.Minimatch
-var Glob = __webpack_require__(7545).Glob
-var util = __webpack_require__(1669)
-var path = __webpack_require__(5622)
-var assert = __webpack_require__(2357)
-var isAbsolute = __webpack_require__(4257)
-var common = __webpack_require__(20)
+var Glob = __nccwpck_require__(3870).Glob
+var util = __nccwpck_require__(1669)
+var path = __nccwpck_require__(5622)
+var assert = __nccwpck_require__(2357)
+var isAbsolute = __nccwpck_require__(7330)
+var common = __nccwpck_require__(6513)
 var alphasort = common.alphasort
 var alphasorti = common.alphasorti
 var setopts = common.setopts
@@ -6115,12 +6318,12 @@ GlobSync.prototype._makeAbs = function (f) {
 
 /***/ }),
 
-/***/ 5867:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 8756:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var wrappy = __webpack_require__(9002)
+var wrappy = __nccwpck_require__(7305)
 var reqs = Object.create(null)
-var once = __webpack_require__(8666)
+var once = __nccwpck_require__(825)
 
 module.exports = wrappy(inflight)
 
@@ -6176,23 +6379,23 @@ function slice (args) {
 
 /***/ }),
 
-/***/ 2150:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 1233:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 try {
-  var util = __webpack_require__(1669);
+  var util = __nccwpck_require__(1669);
   /* istanbul ignore next */
   if (typeof util.inherits !== 'function') throw '';
   module.exports = util.inherits;
 } catch (e) {
   /* istanbul ignore next */
-  module.exports = __webpack_require__(8531);
+  module.exports = __nccwpck_require__(1481);
 }
 
 
 /***/ }),
 
-/***/ 8531:
+/***/ 1481:
 /***/ ((module) => {
 
 if (typeof Object.create === 'function') {
@@ -6226,19 +6429,19 @@ if (typeof Object.create === 'function') {
 
 /***/ }),
 
-/***/ 6930:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 2113:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 module.exports = minimatch
 minimatch.Minimatch = Minimatch
 
 var path = { sep: '/' }
 try {
-  path = __webpack_require__(5622)
+  path = __nccwpck_require__(5622)
 } catch (er) {}
 
 var GLOBSTAR = minimatch.GLOBSTAR = Minimatch.GLOBSTAR = {}
-var expand = __webpack_require__(1190)
+var expand = __nccwpck_require__(7167)
 
 var plTypes = {
   '!': { open: '(?:(?!(?:', close: '))[^/]*?)'},
@@ -7156,10 +7359,10 @@ function regExpEscape (s) {
 
 /***/ }),
 
-/***/ 8666:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 825:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var wrappy = __webpack_require__(9002)
+var wrappy = __nccwpck_require__(7305)
 module.exports = wrappy(once)
 module.exports.strict = wrappy(onceStrict)
 
@@ -7205,7 +7408,7 @@ function onceStrict (fn) {
 
 /***/ }),
 
-/***/ 4257:
+/***/ 7330:
 /***/ ((module) => {
 
 "use strict";
@@ -7233,18 +7436,18 @@ module.exports.win32 = win32;
 
 /***/ }),
 
-/***/ 3682:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 9143:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 module.exports = rimraf
 rimraf.sync = rimrafSync
 
-var assert = __webpack_require__(2357)
-var path = __webpack_require__(5622)
-var fs = __webpack_require__(5747)
+var assert = __nccwpck_require__(2357)
+var path = __nccwpck_require__(5622)
+var fs = __nccwpck_require__(5747)
 var glob = undefined
 try {
-  glob = __webpack_require__(7545)
+  glob = __nccwpck_require__(3870)
 } catch (_err) {
   // treat glob as optional.
 }
@@ -7612,11 +7815,11 @@ function rmkidsSync (p, options) {
 
 /***/ }),
 
-/***/ 3049:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 8624:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-const {promisify} = __webpack_require__(1669);
-const tmp = __webpack_require__(5729);
+const {promisify} = __nccwpck_require__(1669);
+const tmp = __nccwpck_require__(5300);
 
 // file
 module.exports.fileSync = tmp.fileSync;
@@ -7667,8 +7870,8 @@ module.exports.setGracefulCleanup = tmp.setGracefulCleanup;
 
 /***/ }),
 
-/***/ 5729:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 5300:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 /*!
  * Tmp
@@ -7681,14 +7884,14 @@ module.exports.setGracefulCleanup = tmp.setGracefulCleanup;
 /*
  * Module dependencies.
  */
-const fs = __webpack_require__(5747);
-const os = __webpack_require__(2087);
-const path = __webpack_require__(5622);
-const crypto = __webpack_require__(6417);
+const fs = __nccwpck_require__(5747);
+const os = __nccwpck_require__(2087);
+const path = __nccwpck_require__(5622);
+const crypto = __nccwpck_require__(6417);
 const _c = fs.constants && os.constants ?
   { fs: fs.constants, os: os.constants } :
   process.binding('constants');
-const rimraf = __webpack_require__(3682);
+const rimraf = __nccwpck_require__(9143);
 
 /*
  * The working inner variables.
@@ -8436,27 +8639,27 @@ module.exports.setGracefulCleanup = setGracefulCleanup;
 
 /***/ }),
 
-/***/ 7265:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ 4387:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-module.exports = __webpack_require__(2686);
+module.exports = __nccwpck_require__(9804);
 
 
 /***/ }),
 
-/***/ 2686:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ 9804:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 
-var net = __webpack_require__(1631);
-var tls = __webpack_require__(4016);
-var http = __webpack_require__(8605);
-var https = __webpack_require__(7211);
-var events = __webpack_require__(8614);
-var assert = __webpack_require__(2357);
-var util = __webpack_require__(1669);
+var net = __nccwpck_require__(1631);
+var tls = __nccwpck_require__(4016);
+var http = __nccwpck_require__(8605);
+var https = __nccwpck_require__(7211);
+var events = __nccwpck_require__(8614);
+var assert = __nccwpck_require__(2357);
+var util = __nccwpck_require__(1669);
 
 
 exports.httpOverHttp = httpOverHttp;
@@ -8716,7 +8919,7 @@ exports.debug = debug; // for test
 
 /***/ }),
 
-/***/ 9002:
+/***/ 7305:
 /***/ ((module) => {
 
 // Returns a wrapper function that returns a wrapped callback
@@ -8760,7 +8963,7 @@ function wrappy (fn, cb) {
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("assert");
+module.exports = require("assert");;
 
 /***/ }),
 
@@ -8768,7 +8971,7 @@ module.exports = require("assert");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("child_process");
+module.exports = require("child_process");;
 
 /***/ }),
 
@@ -8776,7 +8979,7 @@ module.exports = require("child_process");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("crypto");
+module.exports = require("crypto");;
 
 /***/ }),
 
@@ -8784,7 +8987,7 @@ module.exports = require("crypto");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("events");
+module.exports = require("events");;
 
 /***/ }),
 
@@ -8792,7 +8995,7 @@ module.exports = require("events");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("fs");
+module.exports = require("fs");;
 
 /***/ }),
 
@@ -8800,7 +9003,7 @@ module.exports = require("fs");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("http");
+module.exports = require("http");;
 
 /***/ }),
 
@@ -8808,7 +9011,7 @@ module.exports = require("http");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("https");
+module.exports = require("https");;
 
 /***/ }),
 
@@ -8816,7 +9019,7 @@ module.exports = require("https");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("net");
+module.exports = require("net");;
 
 /***/ }),
 
@@ -8824,7 +9027,7 @@ module.exports = require("net");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("os");
+module.exports = require("os");;
 
 /***/ }),
 
@@ -8832,7 +9035,7 @@ module.exports = require("os");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("path");
+module.exports = require("path");;
 
 /***/ }),
 
@@ -8840,7 +9043,7 @@ module.exports = require("path");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("perf_hooks");
+module.exports = require("perf_hooks");;
 
 /***/ }),
 
@@ -8848,7 +9051,7 @@ module.exports = require("perf_hooks");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("stream");
+module.exports = require("stream");;
 
 /***/ }),
 
@@ -8856,7 +9059,7 @@ module.exports = require("stream");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("tls");
+module.exports = require("tls");;
 
 /***/ }),
 
@@ -8864,7 +9067,7 @@ module.exports = require("tls");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("url");
+module.exports = require("url");;
 
 /***/ }),
 
@@ -8872,7 +9075,7 @@ module.exports = require("url");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("util");
+module.exports = require("util");;
 
 /***/ }),
 
@@ -8880,7 +9083,7 @@ module.exports = require("util");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("zlib");
+module.exports = require("zlib");;
 
 /***/ })
 
@@ -8890,7 +9093,7 @@ module.exports = require("zlib");
 /******/ 	var __webpack_module_cache__ = {};
 /******/ 	
 /******/ 	// The require function
-/******/ 	function __webpack_require__(moduleId) {
+/******/ 	function __nccwpck_require__(moduleId) {
 /******/ 		// Check if module is in cache
 /******/ 		if(__webpack_module_cache__[moduleId]) {
 /******/ 			return __webpack_module_cache__[moduleId].exports;
@@ -8905,7 +9108,7 @@ module.exports = require("zlib");
 /******/ 		// Execute the module function
 /******/ 		var threw = true;
 /******/ 		try {
-/******/ 			__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+/******/ 			__webpack_modules__[moduleId].call(module.exports, module, module.exports, __nccwpck_require__);
 /******/ 			threw = false;
 /******/ 		} finally {
 /******/ 			if(threw) delete __webpack_module_cache__[moduleId];
@@ -8918,10 +9121,10 @@ module.exports = require("zlib");
 /************************************************************************/
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
-/******/ 	__webpack_require__.ab = __dirname + "/";/************************************************************************/
+/******/ 	__nccwpck_require__.ab = __dirname + "/";/************************************************************************/
 /******/ 	// module exports must be returned from runtime so entry inlining is disabled
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(5456);
+/******/ 	return __nccwpck_require__(2792);
 /******/ })()
 ;
